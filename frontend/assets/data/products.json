@@ -1,0 +1,42 @@
+[
+  {
+    "id": "p1",
+    "name": "FIFA 20",
+    "brand": "PS3",
+    "price": 250,
+    "countInStock": 25,
+    "description": "Football game for console",
+    "image": "https://www.freepngimg.com/thumb/fifa/11-2-fifa-png-images.png",
+    "category": "games"
+  },
+  {
+    "id": "p2",
+    "name": "Garden Chair",
+    "brand": "IKEA",
+    "price": 350.9,
+    "countInStock": 10,
+    "description": "Outdoor garden chair",
+    "image": "",
+    "category": "garden"
+  },
+  {
+    "id": "p3",
+    "name": "Swimming Pool",
+    "brand": "OBI",
+    "price": 1350.9,
+    "countInStock": 4,
+    "description": "Family pool for the backyard",
+    "image": "",
+    "category": "garden"
+  },
+  {
+    "id": "p4",
+    "name": "Big Sofa",
+    "brand": "Mobilix",
+    "price": 1000,
+    "countInStock": 2,
+    "description": "Large living-room sofa",
+    "image": "",
+    "category": "home"
+  }
+]

@@ -1,0 +1,8 @@
+[
+  { "id": "electronics", "name": "Electronics" },
+  { "id": "beauty", "name": "Beauty" },
+  { "id": "computers", "name": "Computers" },
+  { "id": "home", "name": "Home" },
+  { "id": "garden", "name": "Garden" },
+  { "id": "games", "name": "Games" }
+]
