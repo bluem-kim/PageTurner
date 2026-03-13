@@ -6,7 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
 import EasyButton from "../../../Shared/StyledComponents/EasyButton";
-import { clearCart } from "../../../Redux/Actions/cartActions";
+import { clearCart, removeSelectedFromCart } from "../../../Redux/Actions/cartActions";
 import baseURL from "../../../assets/common/baseurl";
 import { formatPHP } from "../../../utils/currency";
 import { getShippingFee } from "../../../utils/shipping";
@@ -65,7 +65,15 @@ const Confirm = ({ route, navigation }) => {
         },
       });
 
-      dispatch(clearCart());
+      const lineIds = (order?.orderItems || [])
+        .map((item) => item?.cartLineId)
+        .filter(Boolean);
+
+      if (lineIds.length) {
+        dispatch(removeSelectedFromCart(lineIds));
+      } else {
+        dispatch(clearCart());
+      }
       Toast.show({
         type: "success",
         text1: "Order placed",

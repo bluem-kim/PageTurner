@@ -15,9 +15,16 @@ const STATUS = {
 };
 
 router.get("/", auth, async (req, res) => {
+  const { includeArchived, archived } = req.query;
   let filter = {};
   if (!req.user.isAdmin) {
     filter = { user: req.user.userId };
+  }
+
+  if (archived === "1") {
+    filter.isArchived = true;
+  } else if (includeArchived !== "1") {
+    filter.isArchived = { $ne: true };
   }
 
   const orders = await Order.find(filter)
@@ -171,15 +178,34 @@ router.post("/:id/confirm-delivered", auth, async (req, res) => {
 });
 
 router.delete("/:id", auth, adminOnly, async (req, res) => {
-  const order = await Order.findById(req.params.id);
-  if (!order) {
+  const archived = await Order.findByIdAndUpdate(
+    req.params.id,
+    { isArchived: true },
+    { new: true }
+  );
+  if (!archived) {
     return res.status(404).json({ message: "Order not found" });
   }
 
-  await OrderItem.deleteMany({ _id: { $in: order.orderItems } });
-  await Order.findByIdAndDelete(req.params.id);
+  return res.json({ message: "Order archived" });
+});
 
-  return res.json({ message: "Order deleted" });
+router.put("/:id/archive", auth, adminOnly, async (req, res) => {
+  const isArchived = typeof req.body?.isArchived === "boolean" ? req.body.isArchived : true;
+
+  const updated = await Order.findByIdAndUpdate(
+    req.params.id,
+    { isArchived },
+    { new: true }
+  )
+    .populate("user", "name")
+    .populate({ path: "orderItems", populate: { path: "product", model: "Product" } });
+
+  if (!updated) {
+    return res.status(404).json({ message: "Order not found" });
+  }
+
+  return res.json(updated);
 });
 
 router.get("/get/totalsales", auth, adminOnly, async (req, res) => {

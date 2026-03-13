@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useDispatch } from "react-redux";
 import Toast from "react-native-toast-message";
@@ -7,10 +7,12 @@ import EasyButton from "../../Shared/StyledComponents/EasyButton";
 import TrafficLight from "../../Shared/StyledComponents/TrafficLight";
 import { addToCart } from "../../Redux/Actions/cartActions";
 import { formatPHP } from "../../utils/currency";
+import AuthGlobal from "../../Context/Store/AuthGlobal";
 
-const SingleProduct = ({ route }) => {
+const SingleProduct = ({ route, navigation }) => {
   const item = route.params?.item;
   const dispatch = useDispatch();
+  const authContext = useContext(AuthGlobal);
   const reviews = Array.isArray(item?.reviews) ? item.reviews : [];
 
   const availability =
@@ -30,6 +32,17 @@ const SingleProduct = ({ route }) => {
       : "Available";
 
   const handleAdd = () => {
+    if (!authContext?.stateUser?.isAuthenticated) {
+      Toast.show({
+        type: "info",
+        text1: "Login required",
+        text2: "Please login to add items to cart",
+        topOffset: 60,
+      });
+      navigation.navigate("User", { screen: "Login" });
+      return;
+    }
+
     dispatch(addToCart(item));
     Toast.show({
       type: "success",

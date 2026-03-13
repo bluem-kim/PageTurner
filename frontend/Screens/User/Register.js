@@ -1,18 +1,46 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import Toast from "react-native-toast-message";
 import axios from "axios";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
+import Constants from "expo-constants";
 
 import EasyButton from "../../Shared/StyledComponents/EasyButton";
 import baseURL from "../../assets/common/baseurl";
+import AuthGlobal from "../../Context/Store/AuthGlobal";
+import { loginGoogleUser } from "../../Context/Actions/Auth.actions";
+
+WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_EXPO_CLIENT_ID = Constants.expoConfig?.extra?.googleExpoClientId || "";
+const GOOGLE_WEB_CLIENT_ID = Constants.expoConfig?.extra?.googleWebClientId || "";
+const GOOGLE_ANDROID_CLIENT_ID =
+  Constants.expoConfig?.extra?.googleAndroidClientId || "";
 
 const Register = ({ navigation }) => {
+  const context = useContext(AuthGlobal);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [googleRequest, googleResponse, promptGoogleLogin] = Google.useIdTokenAuthRequest({
+    expoClientId: GOOGLE_EXPO_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+  });
+
+  useEffect(() => {
+    if (context?.stateUser?.isAuthenticated) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "User Profile" }],
+      });
+      navigation.getParent()?.navigate("Shop");
+    }
+  }, [context?.stateUser?.isAuthenticated, navigation]);
 
   const register = async () => {
     if (!email || !name || !phone || !password) {
@@ -49,6 +77,30 @@ const Register = ({ navigation }) => {
     }
   };
 
+  const handleGoogleRegister = async () => {
+    setError("");
+    setSuccess("");
+    if (!GOOGLE_EXPO_CLIENT_ID || !GOOGLE_WEB_CLIENT_ID) {
+      setError("Missing Google OAuth client IDs in app config");
+      return;
+    }
+    await promptGoogleLogin();
+  };
+
+  useEffect(() => {
+    if (googleResponse?.type !== "success") return;
+    const idToken =
+      String(googleResponse?.params?.id_token || "").trim() ||
+      String(googleResponse?.authentication?.idToken || "").trim();
+
+    if (!idToken) {
+      setError("Google sign-in did not return an ID token");
+      return;
+    }
+
+    loginGoogleUser(idToken, context.dispatch);
+  }, [googleResponse, context.dispatch]);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Register</Text>
@@ -72,6 +124,9 @@ const Register = ({ navigation }) => {
       </EasyButton>
       <EasyButton secondary large onPress={() => navigation.navigate("Login") }>
         <Text style={styles.btn}>Back to Login</Text>
+      </EasyButton>
+      <EasyButton secondary large onPress={handleGoogleRegister} disabled={!googleRequest}>
+        <Text style={styles.btn}>Register with Google</Text>
       </EasyButton>
     </View>
   );

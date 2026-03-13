@@ -2,6 +2,8 @@ const express = require("express");
 const fs = require("fs/promises");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 
 const User = require("../models/User");
 const { auth, adminOnly } = require("../middleware/auth");
@@ -9,6 +11,35 @@ const upload = require("../middleware/upload");
 const { uploadImageBuffer, uploadImage } = require("../config/cloudinary");
 
 const router = express.Router();
+const GOOGLE_WEB_CLIENT_ID = String(process.env.GOOGLE_WEB_CLIENT_ID || "").trim();
+const GOOGLE_ANDROID_CLIENT_ID = String(process.env.GOOGLE_ANDROID_CLIENT_ID || "").trim();
+const googleClient = GOOGLE_WEB_CLIENT_ID ? new OAuth2Client(GOOGLE_WEB_CLIENT_ID) : null;
+const GOOGLE_AUDIENCES = [GOOGLE_WEB_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID].filter(Boolean);
+const PUSH_TOKEN_STALE_DAYS = 90;
+
+const buildAuthPayload = (user) => {
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      isAdmin: user.isAdmin,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
+  return {
+    email: user.email,
+    name: user.name,
+    phone: user.phone,
+    birthday: user.birthday,
+    address: user.address,
+    avatar: user.avatar,
+    userId: user.id,
+    isAdmin: user.isAdmin,
+    isActive: user.isActive,
+    token,
+  };
+};
 
 router.get("/", auth, adminOnly, async (req, res) => {
   const users = await User.find().select("-passwordHash").sort({ createdAt: -1 });
@@ -158,16 +189,61 @@ const updateProfile = async (req, res) => {
 router.put("/profile", auth, upload.single("avatar"), updateProfile);
 router.post("/profile", auth, upload.single("avatar"), updateProfile);
 
-router.get("/:id", auth, async (req, res) => {
-  if (!req.user.isAdmin && req.user.userId !== req.params.id) {
-    return res.status(403).json({ message: "Forbidden" });
+router.post("/push-token", auth, async (req, res) => {
+  const token = String(req.body?.token || "").trim();
+  const platform = String(req.body?.platform || "unknown").trim() || "unknown";
+
+  if (!token) {
+    return res.status(400).json({ message: "Push token is required" });
   }
 
-  const user = await User.findById(req.params.id).select("-passwordHash");
+  const user = await User.findById(req.user.userId);
   if (!user) {
     return res.status(404).json({ message: "User not found" });
   }
-  return res.json(user);
+
+  const staleCutoff = new Date(Date.now() - PUSH_TOKEN_STALE_DAYS * 24 * 60 * 60 * 1000);
+  const nextTokens = (user.pushTokens || []).filter((entry) => {
+    if (!entry?.token) return false;
+    return new Date(entry.updatedAt || 0) > staleCutoff || entry.token === token;
+  });
+
+  const existing = nextTokens.find((entry) => entry.token === token);
+  if (existing) {
+    existing.platform = platform;
+    existing.updatedAt = new Date();
+  } else {
+    nextTokens.push({ token, platform, updatedAt: new Date() });
+  }
+
+  user.pushTokens = nextTokens;
+  await user.save();
+
+  return res.json({
+    message: "Push token saved",
+    tokenCount: user.pushTokens.length,
+  });
+});
+
+router.delete("/push-token", auth, async (req, res) => {
+  const token = String(req.body?.token || "").trim();
+  if (!token) {
+    return res.status(400).json({ message: "Push token is required" });
+  }
+
+  const user = await User.findById(req.user.userId);
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  const before = (user.pushTokens || []).length;
+  user.pushTokens = (user.pushTokens || []).filter((entry) => entry.token !== token);
+  await user.save();
+
+  return res.json({
+    message: "Push token removed",
+    removed: before - user.pushTokens.length,
+  });
 });
 
 router.post("/register", async (req, res) => {
@@ -221,27 +297,85 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ message: "Invalid credentials" });
   }
 
-  const token = jwt.sign(
-    {
-      userId: user.id,
-      isAdmin: user.isAdmin,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
-  );
+  return res.json(buildAuthPayload(user));
+});
 
-  return res.json({
-    email: user.email,
-    name: user.name,
-    phone: user.phone,
-    birthday: user.birthday,
-    address: user.address,
-    avatar: user.avatar,
-    userId: user.id,
-    isAdmin: user.isAdmin,
-    isActive: user.isActive,
-    token,
-  });
+router.post("/login/google", async (req, res) => {
+  if (!GOOGLE_AUDIENCES.length || !googleClient) {
+    return res.status(500).json({ message: "Google login is not configured on server" });
+  }
+
+  const idToken = String(req.body?.idToken || "").trim();
+  if (!idToken) {
+    return res.status(400).json({ message: "Google idToken is required" });
+  }
+
+  let ticket;
+  try {
+    ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: GOOGLE_AUDIENCES,
+    });
+  } catch (error) {
+    return res.status(401).json({ message: "Invalid Google token" });
+  }
+
+  const payload = ticket.getPayload() || {};
+  const email = String(payload.email || "").toLowerCase();
+
+  if (!payload.email_verified || !email) {
+    return res.status(400).json({ message: "Google account email is not verified" });
+  }
+
+  let user = await User.findOne({ email });
+
+  if (!user) {
+    const randomPassword = crypto.randomBytes(24).toString("hex");
+    const passwordHash = await bcrypt.hash(randomPassword, 10);
+
+    user = await User.create({
+      name: String(payload.name || email.split("@")[0] || "Google User"),
+      email,
+      passwordHash,
+      phone: "",
+      birthday: "",
+      address: "",
+      avatar: String(payload.picture || ""),
+      isAdmin: false,
+      isActive: true,
+    });
+  } else {
+    if (!user.isActive) {
+      return res.status(403).json({ message: "Account is deactivated" });
+    }
+
+    let changed = false;
+    if (!user.avatar && payload.picture) {
+      user.avatar = String(payload.picture);
+      changed = true;
+    }
+    if (!user.name && payload.name) {
+      user.name = String(payload.name);
+      changed = true;
+    }
+    if (changed) {
+      await user.save();
+    }
+  }
+
+  return res.json(buildAuthPayload(user));
+});
+
+router.get("/:id", auth, async (req, res) => {
+  if (!req.user.isAdmin && req.user.userId !== req.params.id) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  const user = await User.findById(req.params.id).select("-passwordHash");
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+  return res.json(user);
 });
 
 module.exports = router;

@@ -9,6 +9,13 @@ const userSchema = new mongoose.Schema(
     birthday: { type: String, default: "" },
     address: { type: String, default: "" },
     avatar: { type: String, default: "" },
+    pushTokens: [
+      {
+        token: { type: String, trim: true },
+        platform: { type: String, default: "unknown" },
+        updatedAt: { type: Date, default: Date.now },
+      },
+    ],
     isAdmin: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
   },

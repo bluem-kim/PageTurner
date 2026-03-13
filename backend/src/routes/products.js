@@ -7,6 +7,7 @@ const Order = require("../models/Order");
 const { auth, adminOnly } = require("../middleware/auth");
 const upload = require("../middleware/upload");
 const { uploadImage } = require("../config/cloudinary");
+const { hasProfanity } = require("../utils/profanityFilter");
 
 const router = express.Router();
 
@@ -90,12 +91,13 @@ const uploadFilesToCloudinary = async (files = [], folder = "pageturnerr/product
 };
 
 const recalculateRatings = (reviews = []) => {
-  const numReviews = reviews.length;
+  const activeReviews = (reviews || []).filter((review) => !review?.isArchived);
+  const numReviews = activeReviews.length;
   if (!numReviews) {
     return { rating: 0, numReviews: 0 };
   }
 
-  const total = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+  const total = activeReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
   return {
     rating: Number((total / numReviews).toFixed(1)),
     numReviews,
@@ -140,13 +142,31 @@ const validateGenres = async (payload) => {
   return null;
 };
 
+const sanitizePublicProduct = (productDoc) => {
+  if (!productDoc) return productDoc;
+  const plain = typeof productDoc.toObject === "function" ? productDoc.toObject() : { ...productDoc };
+  plain.reviews = (Array.isArray(plain.reviews) ? plain.reviews : []).filter(
+    (review) => !review?.isArchived
+  );
+  return plain;
+};
+
 router.get("/", async (req, res) => {
-  const products = await Product.find()
+  const { includeArchived, archived } = req.query;
+  const query = {};
+
+  if (archived === "1") {
+    query.isArchived = true;
+  } else if (includeArchived !== "1") {
+    query.isArchived = { $ne: true };
+  }
+
+  const products = await Product.find(query)
     .populate("genre")
     .populate("category")
     .populate("subGenres")
     .sort({ createdAt: -1 });
-  res.json(products);
+  res.json(products.map(sanitizePublicProduct));
 });
 
 router.get("/get/count", async (req, res) => {
@@ -161,18 +181,25 @@ router.get("/get/featured/:count", async (req, res) => {
     .populate("genre")
     .populate("category")
     .populate("subGenres");
-  res.json(products);
+  res.json(products.map(sanitizePublicProduct));
 });
 
 router.get("/reviews/me", auth, async (req, res) => {
-  const products = await Product.find({ "reviews.user": req.user.userId }).select(
+  const products = await Product.find({
+    reviews: {
+      $elemMatch: {
+        user: req.user.userId,
+        isArchived: { $ne: true },
+      },
+    },
+  }).select(
     "name image reviews"
   );
 
   const result = products
     .map((product) => {
       const ownReview = (product.reviews || []).find(
-        (review) => String(review.user) === String(req.user.userId)
+        (review) => String(review.user) === String(req.user.userId) && !review?.isArchived
       );
       if (!ownReview) return null;
 
@@ -196,6 +223,61 @@ router.get("/reviews/me", auth, async (req, res) => {
   return res.json(result);
 });
 
+router.get("/reviews/admin", auth, adminOnly, async (req, res) => {
+  const includeArchived = String(req.query.includeArchived || "") === "1";
+  const archivedOnly = String(req.query.archived || "") === "1";
+
+  const products = await Product.find({ "reviews.0": { $exists: true } })
+    .select("name image reviews")
+    .lean();
+
+  const flattened = [];
+  for (const product of products) {
+    for (const review of product.reviews || []) {
+      flattened.push({
+        productId: product._id,
+        productName: product.name,
+        productImage: product.image,
+        reviewId: review._id,
+        user: review.user,
+        reviewerName: review.name || "User",
+        rating: review.rating,
+        comment: review.comment || "",
+        isArchived: Boolean(review.isArchived),
+        images: review.images || [],
+        order: review.order,
+        createdAt: review.createdAt,
+      });
+    }
+  }
+
+  const byArchiveState = flattened.filter((item) => {
+    if (archivedOnly) return item.isArchived;
+    if (includeArchived) return true;
+    return !item.isArchived;
+  });
+
+  const query = String(req.query.q || "").trim().toLowerCase();
+  const filtered = query
+    ? byArchiveState.filter((item) => {
+        const productName = String(item.productName || "").toLowerCase();
+        const reviewerName = String(item.reviewerName || "").toLowerCase();
+        const comment = String(item.comment || "").toLowerCase();
+        const ratingText = String(item.rating || "").toLowerCase();
+
+        return (
+          productName.includes(query) ||
+          reviewerName.includes(query) ||
+          comment.includes(query) ||
+          ratingText.includes(query)
+        );
+      })
+    : byArchiveState;
+
+  filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return res.json(filtered);
+});
+
 router.get("/:id", async (req, res) => {
   const product = await Product.findById(req.params.id)
     .populate("genre")
@@ -204,7 +286,7 @@ router.get("/:id", async (req, res) => {
   if (!product) {
     return res.status(404).json({ message: "Product not found" });
   }
-  return res.json(product);
+  return res.json(sanitizePublicProduct(product));
 });
 
 router.post(
@@ -260,9 +342,16 @@ router.post(
       existingReview?.images || []
     );
 
+    const reviewComment = String(req.body.comment || "").trim();
+    if (hasProfanity(reviewComment)) {
+      return res.status(400).json({
+        message: "Review contains inappropriate language. Please edit your comment.",
+      });
+    }
+
     if (existingReview) {
       existingReview.rating = rating;
-      existingReview.comment = String(req.body.comment || "").trim();
+      existingReview.comment = reviewComment;
       existingReview.images = [...existingImages, ...reviewImages];
       existingReview.order = deliveredOrder._id;
       existingReview.createdAt = new Date();
@@ -271,7 +360,7 @@ router.post(
         user: req.user.userId,
         name: req.user.name || "User",
         rating,
-        comment: String(req.body.comment || "").trim(),
+        comment: reviewComment,
         images: reviewImages,
         order: deliveredOrder._id,
       });
@@ -312,6 +401,80 @@ router.delete("/:id/reviews/me", auth, async (req, res) => {
   await product.save();
 
   return res.json({ message: "Review removed" });
+});
+
+router.put("/:id/reviews/:reviewId/archive", auth, adminOnly, async (req, res) => {
+  const isArchived = typeof req.body?.isArchived === "boolean" ? req.body.isArchived : true;
+
+  const product = await Product.findById(req.params.id);
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
+  }
+
+  const targetReview = (product.reviews || []).find(
+    (review) => String(review._id) === String(req.params.reviewId)
+  );
+
+  if (!targetReview) {
+    return res.status(404).json({ message: "Review not found" });
+  }
+
+  targetReview.isArchived = isArchived;
+
+  const stats = recalculateRatings(product.reviews || []);
+  product.rating = stats.rating;
+  product.numReviews = stats.numReviews;
+  await product.save();
+
+  return res.json({ message: isArchived ? "Review archived" : "Review restored" });
+});
+
+router.put("/reviews/admin/archive/bulk", auth, adminOnly, async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  const isArchived = typeof req.body?.isArchived === "boolean" ? req.body.isArchived : true;
+
+  if (!items.length) {
+    return res.status(400).json({ message: "items is required" });
+  }
+
+  const grouped = new Map();
+  for (const item of items) {
+    const productId = String(item?.productId || "").trim();
+    const reviewId = String(item?.reviewId || "").trim();
+    if (!productId || !reviewId) continue;
+
+    const list = grouped.get(productId) || [];
+    list.push(reviewId);
+    grouped.set(productId, list);
+  }
+
+  let updatedCount = 0;
+
+  for (const [productId, reviewIds] of grouped.entries()) {
+    const product = await Product.findById(productId);
+    if (!product) continue;
+
+    let changed = false;
+    for (const review of product.reviews || []) {
+      if (reviewIds.includes(String(review._id))) {
+        review.isArchived = isArchived;
+        changed = true;
+        updatedCount += 1;
+      }
+    }
+
+    if (changed) {
+      const stats = recalculateRatings(product.reviews || []);
+      product.rating = stats.rating;
+      product.numReviews = stats.numReviews;
+      await product.save();
+    }
+  }
+
+  return res.json({
+    message: isArchived ? "Reviews archived" : "Reviews restored",
+    updatedCount,
+  });
 });
 
 router.post(
@@ -432,11 +595,34 @@ router.post(
 );
 
 router.delete("/:id", auth, adminOnly, async (req, res) => {
-  const deleted = await Product.findByIdAndDelete(req.params.id);
-  if (!deleted) {
+  const archived = await Product.findByIdAndUpdate(
+    req.params.id,
+    { isArchived: true },
+    { new: true }
+  );
+  if (!archived) {
     return res.status(404).json({ message: "Product not found" });
   }
-  return res.json({ message: "Product deleted" });
+  return res.json({ message: "Product archived" });
+});
+
+router.put("/:id/archive", auth, adminOnly, async (req, res) => {
+  const isArchived = typeof req.body?.isArchived === "boolean" ? req.body.isArchived : true;
+
+  const updated = await Product.findByIdAndUpdate(
+    req.params.id,
+    { isArchived },
+    { new: true }
+  )
+    .populate("genre")
+    .populate("category")
+    .populate("subGenres");
+
+  if (!updated) {
+    return res.status(404).json({ message: "Product not found" });
+  }
+
+  return res.json(updated);
 });
 
 module.exports = router;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -18,6 +18,7 @@ import ProductList from "./ProductList";
 import { addToCart } from "../../Redux/Actions/cartActions";
 import { fetchProducts } from "../../Redux/Actions/productActions";
 import baseURL from "../../assets/common/baseurl";
+import AuthGlobal from "../../Context/Store/AuthGlobal";
 
 const PRICE_RANGES = [
   { key: "all", label: "All Prices", min: 0, max: Number.POSITIVE_INFINITY },
@@ -34,6 +35,7 @@ const ProductContainer = ({ navigation }) => {
   const [categories, setCategories] = useState([]);
   const { items: products, loading, error } = useSelector((state) => state.products);
   const dispatch = useDispatch();
+  const authContext = useContext(AuthGlobal);
 
   useEffect(() => {
     let mounted = true;
@@ -142,6 +144,17 @@ const ProductContainer = ({ navigation }) => {
   };
 
   const handleAdd = (item) => {
+    if (!authContext?.stateUser?.isAuthenticated) {
+      Toast.show({
+        type: "info",
+        text1: "Login required",
+        text2: "Please login to add items to cart",
+        topOffset: 60,
+      });
+      navigation.navigate("User", { screen: "Login" });
+      return;
+    }
+
     dispatch(addToCart(item));
     Toast.show({
       type: "success",

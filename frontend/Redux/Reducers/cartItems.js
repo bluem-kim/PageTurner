@@ -1,4 +1,10 @@
-import { ADD_TO_CART, REMOVE_FROM_CART, CLEAR_CART, HYDRATE_CART } from "../constants";
+import {
+  ADD_TO_CART,
+  REMOVE_FROM_CART,
+  REMOVE_SELECTED_FROM_CART,
+  CLEAR_CART,
+  HYDRATE_CART,
+} from "../constants";
 
 const cartItems = (state = [], action) => {
   switch (action.type) {
@@ -6,10 +12,18 @@ const cartItems = (state = [], action) => {
       return [...state, action.payload];
     case REMOVE_FROM_CART:
       return state.filter((item) => {
+        if (item.cartLineId && action.payload?.cartLineId) {
+          return item.cartLineId !== action.payload.cartLineId;
+        }
         const currentId = item.id || item._id;
         const targetId = action.payload.id || action.payload._id;
         return currentId !== targetId;
       });
+    case REMOVE_SELECTED_FROM_CART: {
+      const selected = new Set(Array.isArray(action.payload) ? action.payload : []);
+      if (!selected.size) return state;
+      return state.filter((item) => !selected.has(item.cartLineId));
+    }
     case CLEAR_CART:
       return [];
     case HYDRATE_CART:

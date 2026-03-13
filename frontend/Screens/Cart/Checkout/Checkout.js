@@ -6,8 +6,11 @@ import Toast from "react-native-toast-message";
 import EasyButton from "../../../Shared/StyledComponents/EasyButton";
 import { SHIPPING_REGION_OPTIONS, getShippingFee } from "../../../utils/shipping";
 
-const Checkout = ({ navigation }) => {
+const Checkout = ({ navigation, route }) => {
   const cartItems = useSelector((state) => state.cartItems);
+  const items = Array.isArray(route?.params?.selectedItems) && route.params.selectedItems.length
+    ? route.params.selectedItems
+    : cartItems;
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [zip, setZip] = useState("");
@@ -15,7 +18,7 @@ const Checkout = ({ navigation }) => {
   const [phone, setPhone] = useState("");
   const [shippingRegion, setShippingRegion] = useState("luzon");
   const shippingFee = getShippingFee(shippingRegion);
-  const subtotal = cartItems.reduce((sum, item) => sum + Number(item.price || 0), 0);
+  const subtotal = items.reduce((sum, item) => sum + Number(item.price || 0), 0);
   const total = subtotal + shippingFee;
 
   const order = useMemo(
@@ -29,11 +32,11 @@ const Checkout = ({ navigation }) => {
       shippingFee,
       subtotal,
       total,
-      orderItems: cartItems,
+      orderItems: items,
       status: "3",
       dateOrdered: new Date().toISOString(),
     }),
-    [address, city, zip, country, phone, shippingRegion, shippingFee, subtotal, total, cartItems]
+    [address, city, zip, country, phone, shippingRegion, shippingFee, subtotal, total, items]
   );
 
   return (

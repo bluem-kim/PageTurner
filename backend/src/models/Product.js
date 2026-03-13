@@ -30,6 +30,7 @@ const productSchema = new mongoose.Schema(
     rating: { type: Number, default: 0 },
     numReviews: { type: Number, default: 0 },
     purchasedCount: { type: Number, default: 0 },
+    isArchived: { type: Boolean, default: false },
     reviews: [
       {
         user: {
@@ -46,6 +47,7 @@ const productSchema = new mongoose.Schema(
           ref: "Order",
           required: true,
         },
+        isArchived: { type: Boolean, default: false },
         createdAt: { type: Date, default: Date.now },
       },
     ],

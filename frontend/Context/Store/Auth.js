@@ -5,6 +5,7 @@ import { jwtDecode } from "jwt-decode";
 import authReducer from "../Reducers/Auth.reducer";
 import { setCurrentUser } from "../Actions/Auth.actions";
 import AuthGlobal from "./AuthGlobal";
+import { getJwtToken } from "../../utils/sessionStorage";
 
 const Auth = ({ children }) => {
   const [stateUser, dispatch] = useReducer(authReducer, {
@@ -15,7 +16,7 @@ const Auth = ({ children }) => {
 
   useEffect(() => {
     const restoreUser = async () => {
-      const token = await AsyncStorage.getItem("jwt");
+      const token = await getJwtToken();
       const profileRaw = await AsyncStorage.getItem("userProfile");
       if (token) {
         const decoded = jwtDecode(token);

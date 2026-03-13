@@ -12,6 +12,7 @@ const UserProfile = ({ navigation }) => {
   const context = useContext(AuthGlobal);
   const user = context?.stateUser?.user || {};
   const profile = context?.stateUser?.userProfile || {};
+  const isAdmin = Boolean(profile.isAdmin || user.isAdmin);
 
   const signOut = async () => {
     await logoutUser(context.dispatch);
@@ -34,12 +35,16 @@ const UserProfile = ({ navigation }) => {
         <EasyButton secondary medium onPress={() => navigation.navigate("Change Password")}>
           <Text style={styles.btn}>Change Password</Text>
         </EasyButton>
-        <EasyButton secondary medium onPress={() => navigation.navigate("My Orders")}>
-          <Text style={styles.btn}>My Orders</Text>
-        </EasyButton>
-        <EasyButton secondary medium onPress={() => navigation.navigate("My Reviews")}>
-          <Text style={styles.btn}>My Reviews</Text>
-        </EasyButton>
+        {!isAdmin ? (
+          <EasyButton secondary medium onPress={() => navigation.navigate("My Orders")}>
+            <Text style={styles.btn}>My Orders</Text>
+          </EasyButton>
+        ) : null}
+        {!isAdmin ? (
+          <EasyButton secondary medium onPress={() => navigation.navigate("My Reviews")}>
+            <Text style={styles.btn}>My Reviews</Text>
+          </EasyButton>
+        ) : null}
       </View>
 
       <EasyButton danger large onPress={signOut}>

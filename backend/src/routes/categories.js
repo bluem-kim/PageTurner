@@ -1,14 +1,19 @@
 const express = require("express");
 
 const Category = require("../models/Category");
-const Product = require("../models/Product");
 const { auth, adminOnly } = require("../middleware/auth");
 
 const router = express.Router();
 
 router.get("/", async (req, res) => {
   const query = {};
-  const { includeSubgenres, parent } = req.query;
+  const { includeSubgenres, parent, includeArchived, archived } = req.query;
+
+  if (archived === "1") {
+    query.isArchived = true;
+  } else if (includeArchived !== "1") {
+    query.isArchived = { $ne: true };
+  }
 
   if (parent !== undefined) {
     query.parent = parent === "null" || parent === "" ? null : parent;
@@ -85,27 +90,32 @@ router.put("/:id", auth, adminOnly, async (req, res) => {
 });
 
 router.delete("/:id", auth, adminOnly, async (req, res) => {
-  const hasChildren = await Category.exists({ parent: req.params.id });
-  if (hasChildren) {
-    return res.status(400).json({
-      message: "Delete sub-genres first before deleting this main genre",
-    });
-  }
+  const archived = await Category.findByIdAndUpdate(
+    req.params.id,
+    { isArchived: true },
+    { new: true }
+  ).populate("parent", "name");
 
-  const isUsedInProducts = await Product.exists({
-    $or: [{ genre: req.params.id }, { category: req.params.id }],
-  });
-  if (isUsedInProducts) {
-    return res.status(400).json({
-      message: "Genre is used by products and cannot be deleted",
-    });
-  }
-
-  const deleted = await Category.findByIdAndDelete(req.params.id);
-  if (!deleted) {
+  if (!archived) {
     return res.status(404).json({ message: "Category not found" });
   }
-  return res.json({ message: "Genre deleted" });
+  return res.json({ message: "Genre archived" });
+});
+
+router.put("/:id/archive", auth, adminOnly, async (req, res) => {
+  const isArchived = typeof req.body?.isArchived === "boolean" ? req.body.isArchived : true;
+
+  const updated = await Category.findByIdAndUpdate(
+    req.params.id,
+    { isArchived },
+    { new: true }
+  ).populate("parent", "name");
+
+  if (!updated) {
+    return res.status(404).json({ message: "Category not found" });
+  }
+
+  return res.json(updated);
 });
 
 module.exports = router;

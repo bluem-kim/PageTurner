@@ -27,6 +27,7 @@ const orderSchema = new mongoose.Schema(
     },
     shippingFee: { type: Number, default: 0 },
     status: { type: String, default: "3" },
+    isArchived: { type: Boolean, default: false, index: true },
     totalPrice: { type: Number, default: 0 },
     user: {
       type: mongoose.Schema.Types.ObjectId,

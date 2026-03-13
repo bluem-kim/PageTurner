@@ -5,7 +5,11 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "seed:users": "node src/utils/seedUsers.js",
+    "seed:orders": "node src/utils/seedOrders.js",
+    "seed:users:randomize": "node src/utils/randomizeSampleUsers.js",
+    "seed:reviews": "node src/utils/seedReviews.js"
   },
   "keywords": [],
   "author": "",
@@ -17,7 +21,9 @@
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "google-auth-library": "^9.15.1",
     "jsonwebtoken": "^9.0.3",
+    "leo-profanity": "^1.9.0",
     "mongoose": "^9.2.4",
     "morgan": "^1.10.1",
     "multer": "^2.1.1"

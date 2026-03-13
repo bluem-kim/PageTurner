@@ -1,20 +1,27 @@
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useContext, useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { Provider, useDispatch } from "react-redux";
 import Toast from "react-native-toast-message";
 
 import Main from "./Navigators/Main";
 import Auth from "./Context/Store/Auth";
+import AuthGlobal from "./Context/Store/AuthGlobal";
 import store from "./Redux/store";
-import { loadCartFromStorage } from "./Redux/Actions/cartActions";
+import { clearCart, loadCartFromStorage } from "./Redux/Actions/cartActions";
 
 const AppContent = () => {
   const dispatch = useDispatch();
+  const auth = useContext(AuthGlobal);
+  const isAuthenticated = auth?.stateUser?.isAuthenticated;
 
   useEffect(() => {
-    dispatch(loadCartFromStorage());
-  }, [dispatch]);
+    if (isAuthenticated) {
+      dispatch(loadCartFromStorage());
+      return;
+    }
+    dispatch(clearCart());
+  }, [dispatch, isAuthenticated]);
 
   return (
     <NavigationContainer>

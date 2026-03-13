@@ -20,6 +20,11 @@ const categorySchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    isArchived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   { timestamps: true }
 );

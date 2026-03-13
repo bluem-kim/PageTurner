@@ -1,7 +1,9 @@
 {
   "expo": {
+    "owner": "emkim",
     "name": "pageturnerr",
     "slug": "pageturnerr",
+    "scheme": "pageturnerr",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,9 +14,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "com.maria.pageturnerr",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.maria.pageturnerr",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -24,6 +28,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "googleExpoClientId": "1026659916033-m0mbk86av9se6tntl9rtn1fkqecclra6.apps.googleusercontent.com",
+      "googleWebClientId": "1026659916033-m0mbk86av9se6tntl9rtn1fkqecclra6.apps.googleusercontent.com",
+      "googleAndroidClientId": "1026659916033-mabvlmhs2aqgu0vdjltvd77ji5idt0hg.apps.googleusercontent.com"
     },
     "jsEngine": "hermes",
     "plugins": [

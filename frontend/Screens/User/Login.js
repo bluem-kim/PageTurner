@@ -1,9 +1,19 @@
 import React, { useContext, useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
+import Constants from "expo-constants";
 
 import AuthGlobal from "../../Context/Store/AuthGlobal";
-import { loginUser } from "../../Context/Actions/Auth.actions";
+import { loginGoogleUser, loginUser } from "../../Context/Actions/Auth.actions";
 import EasyButton from "../../Shared/StyledComponents/EasyButton";
+
+WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_EXPO_CLIENT_ID = Constants.expoConfig?.extra?.googleExpoClientId || "";
+const GOOGLE_WEB_CLIENT_ID = Constants.expoConfig?.extra?.googleWebClientId || "";
+const GOOGLE_ANDROID_CLIENT_ID =
+  Constants.expoConfig?.extra?.googleAndroidClientId || "";
 
 const Login = ({ navigation }) => {
   const context = useContext(AuthGlobal);
@@ -11,6 +21,11 @@ const Login = ({ navigation }) => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [googleRequest, googleResponse, promptGoogleLogin] = Google.useIdTokenAuthRequest({
+    expoClientId: GOOGLE_EXPO_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+  });
 
   useEffect(() => {
     if (context?.stateUser?.isAuthenticated) {
@@ -36,6 +51,29 @@ const Login = ({ navigation }) => {
     setSuccess("");
     await loginUser({ email, password }, context.dispatch);
   };
+
+  const handleGoogleLogin = async () => {
+    setError("");
+    setSuccess("");
+    if (!GOOGLE_EXPO_CLIENT_ID || !GOOGLE_WEB_CLIENT_ID) {
+      setError("Missing Google OAuth client IDs in app config");
+      return;
+    }
+    await promptGoogleLogin();
+  };
+
+  useEffect(() => {
+    if (googleResponse?.type !== "success") return;
+    const idToken =
+      String(googleResponse?.params?.id_token || "").trim() ||
+      String(googleResponse?.authentication?.idToken || "").trim();
+    if (!idToken) {
+      setError("Google sign-in did not return an ID token");
+      return;
+    }
+
+    loginGoogleUser(idToken, context.dispatch);
+  }, [googleResponse, context.dispatch]);
 
   return (
     <View style={styles.container}>
@@ -64,6 +102,9 @@ const Login = ({ navigation }) => {
       </EasyButton>
       <EasyButton secondary large onPress={() => navigation.navigate("Register") }>
         <Text style={styles.btn}>Create Account</Text>
+      </EasyButton>
+      <EasyButton secondary large onPress={handleGoogleLogin} disabled={!googleRequest}>
+        <Text style={styles.btn}>Continue with Google</Text>
       </EasyButton>
     </View>
   );

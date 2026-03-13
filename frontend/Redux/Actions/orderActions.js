@@ -13,11 +13,16 @@ import {
   USER_ORDER_STATUS_SUCCESS,
 } from "../constants";
 
-export const fetchAdminOrders = () => async (dispatch) => {
+export const fetchAdminOrders = (options = {}) => async (dispatch) => {
   dispatch({ type: ADMIN_ORDERS_REQUEST });
   try {
     const token = await AsyncStorage.getItem("jwt");
-    const res = await axios.get(`${baseURL}orders`, {
+    const query = [];
+    if (options?.includeArchived) query.push("includeArchived=1");
+    if (options?.archivedOnly) query.push("archived=1");
+    const suffix = query.length ? `?${query.join("&")}` : "";
+
+    const res = await axios.get(`${baseURL}orders${suffix}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     dispatch({ type: ADMIN_ORDERS_SUCCESS, payload: res.data || [] });
@@ -34,6 +39,17 @@ export const updateAdminOrderStatus = (orderId, status) => async (dispatch) => {
   const res = await axios.put(
     `${baseURL}orders/${orderId}`,
     { status },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  dispatch({ type: ADMIN_ORDER_STATUS_SUCCESS, payload: res.data });
+  return res.data;
+};
+
+export const updateAdminOrderArchive = (orderId, isArchived) => async (dispatch) => {
+  const token = await AsyncStorage.getItem("jwt");
+  const res = await axios.put(
+    `${baseURL}orders/${orderId}/archive`,
+    { isArchived },
     { headers: { Authorization: `Bearer ${token}` } }
   );
   dispatch({ type: ADMIN_ORDER_STATUS_SUCCESS, payload: res.data });
