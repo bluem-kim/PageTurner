@@ -8,9 +8,9 @@ const port = process.env.PORT || 4000;
 
 connectDB()
   .then(() => {
-    app.listen(port, () => {
-      console.log(`API running on http://localhost:${port}`);
-    });
+    app.listen(port, '0.0.0.0', () => {
+  console.log(`API running on http://0.0.0.0:${port}`);
+});
   })
   .catch((error) => {
     console.error("Database connection failed:", error.message);

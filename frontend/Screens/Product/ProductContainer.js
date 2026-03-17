@@ -28,21 +28,25 @@ const PRICE_RANGES = [
   { key: "1000+", label: "PHP 1000+", min: 1000, max: Number.POSITIVE_INFINITY },
 ];
 
+
 const ProductContainer = ({ navigation }) => {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [activePriceRange, setActivePriceRange] = useState("all");
   const [categories, setCategories] = useState([]);
   const { items: products, loading, error } = useSelector((state) => state.products);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [refreshing, setRefreshing] = useState(false);
+  const PAGE_SIZE = 20;
   const dispatch = useDispatch();
   const authContext = useContext(AuthGlobal);
 
+  // Load categories and first page
   useEffect(() => {
     let mounted = true;
-
-    const loadData = async () => {
-      dispatch(fetchProducts());
-
+    dispatch(fetchProducts({ limit: PAGE_SIZE, page: 1 }));
+    const loadCategories = async () => {
       try {
         const categoriesRes = await axios.get(`${baseURL}categories`);
         if (!mounted) return;
@@ -56,12 +60,23 @@ const ProductContainer = ({ navigation }) => {
         });
       }
     };
-
-    loadData();
+    loadCategories();
     return () => {
       mounted = false;
     };
   }, [dispatch]);
+
+  // Load more products for infinite scroll
+  // Infinite scroll: just increment page and fetch more if needed (optional, not implemented here)
+  // You can implement advanced infinite scroll by storing all loaded pages in Redux if needed.
+
+  // Pull to refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await dispatch(fetchProducts({ limit: PAGE_SIZE, page: 1 }));
+    setPage(1);
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     if (!error) return;
@@ -75,7 +90,6 @@ const ProductContainer = ({ navigation }) => {
 
   const filtered = useMemo(() => {
     const selectedRange = PRICE_RANGES.find((r) => r.key === activePriceRange) || PRICE_RANGES[0];
-
     const byCategory = activeCategory === "all"
       ? products
       : products.filter((p) => {
@@ -87,21 +101,16 @@ const ProductContainer = ({ navigation }) => {
             }
             return String(value);
           };
-
           const genreId = typeof p.genre === "object"
             ? p.genre?.id || p.genre?._id
             : p.genre;
           if (genreId && String(genreId) === selectedId) return true;
-
           const categoryParentId = typeof p.category === "object"
             ? p.category?.parent?.id || p.category?.parent?._id || p.category?.parent
             : null;
-
           if (categoryParentId && String(categoryParentId) === selectedId) return true;
-
           const categoryId = getId(p.category);
           if (categoryId && categoryId === selectedId) return true;
-
           const matchesSubGenre = Array.isArray(p.subGenres)
             ? p.subGenres.some((sub) => {
                 const subId = getId(sub);
@@ -109,28 +118,23 @@ const ProductContainer = ({ navigation }) => {
                 return subId === selectedId || subParentId === selectedId;
               })
             : false;
-
           return matchesSubGenre;
         });
-
     const bySearch = byCategory.filter((p) =>
       String(p.name || "").toLowerCase().includes(query.toLowerCase().trim())
     );
-
     const byPrice = bySearch.filter((p) => {
       const price = Number(p.price || 0);
       if (price < selectedRange.min) return false;
       if (price > selectedRange.max) return false;
       return true;
     });
-
     return [...byPrice].sort((a, b) => {
       const purchasesA = Number(a.purchasedCount || 0);
       const purchasesB = Number(b.purchasedCount || 0);
       if (purchasesA !== purchasesB) {
         return purchasesB - purchasesA;
       }
-
       return String(a.name || "").localeCompare(String(b.name || ""), undefined, {
         sensitivity: "base",
       });
@@ -202,28 +206,31 @@ const ProductContainer = ({ navigation }) => {
         onChange={setActiveCategory}
       />
 
-      {loading ? (
-        <View style={styles.emptyWrap}>
-          <ActivityIndicator size="large" color="#1f8a70" />
-        </View>
-      ) : null}
-
-      {!loading && filtered.length ? (
-        <FlatList
-          contentContainerStyle={styles.list}
-          data={filtered}
-          numColumns={2}
-          columnWrapperStyle={{ justifyContent: "space-between" }}
-          renderItem={({ item }) => (
-            <ProductList item={item} navigation={navigation} onAdd={handleAdd} />
-          )}
-          keyExtractor={(item, index) => String(item.id || item._id || index)}
-        />
-      ) : !loading ? (
-        <View style={styles.emptyWrap}>
-          <Text>No products found</Text>
-        </View>
-      ) : null}
+      <FlatList
+        contentContainerStyle={styles.list}
+        data={filtered}
+        numColumns={2}
+        columnWrapperStyle={{ justifyContent: "space-between" }}
+        renderItem={({ item }) => (
+          <ProductList item={item} navigation={navigation} onAdd={handleAdd} />
+        )}
+        keyExtractor={(item, index) => String(item.id || item._id || index)}
+        // Infinite scroll temporarily disabled
+        ListFooterComponent={loading ? (
+          <View style={styles.emptyWrap}>
+            <ActivityIndicator size="large" color="#1f8a70" />
+          </View>
+        ) : null}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        ListEmptyComponent={!loading ? (
+          <View style={styles.emptyWrap}>
+            <Text style={{ color: error ? "red" : "#333" }}>
+              {error ? `Error: ${error}` : "No products found"}
+            </Text>
+          </View>
+        ) : null}
+      />
     </View>
   );
 };

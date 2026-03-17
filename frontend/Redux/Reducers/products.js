@@ -16,9 +16,18 @@ const productsReducer = (state = initialState, action) => {
     case PRODUCTS_REQUEST:
       return { ...state, loading: true, error: "" };
     case PRODUCTS_SUCCESS:
-      return { ...state, loading: false, items: action.payload || [], error: "" };
+      return {
+        ...state,
+        loading: false,
+        items: action.payload.products || [],
+        total: action.payload.total || 0,
+        page: action.payload.page || 1,
+        pageSize: action.payload.pageSize || 0,
+        totalPages: action.payload.totalPages || 1,
+        error: "",
+      };
     case PRODUCTS_FAIL:
-      return { ...state, loading: false, error: action.payload || "Failed to load products" };
+      return { ...state, loading: false, error: action.payload };
     case PRODUCT_ARCHIVE_SUCCESS:
       return {
         ...state,

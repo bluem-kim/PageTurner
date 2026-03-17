@@ -151,8 +151,10 @@ const sanitizePublicProduct = (productDoc) => {
   return plain;
 };
 
+
+// GET /products with pagination
 router.get("/", async (req, res) => {
-  const { includeArchived, archived } = req.query;
+  const { includeArchived, archived, limit, page } = req.query;
   const query = {};
 
   if (archived === "1") {
@@ -161,12 +163,29 @@ router.get("/", async (req, res) => {
     query.isArchived = { $ne: true };
   }
 
-  const products = await Product.find(query)
-    .populate("genre")
-    .populate("category")
-    .populate("subGenres")
-    .sort({ createdAt: -1 });
-  res.json(products.map(sanitizePublicProduct));
+  // Pagination
+  const pageNum = Math.max(1, parseInt(page) || 1);
+  const pageSize = Math.max(1, Math.min(100, parseInt(limit) || 20));
+  const skip = (pageNum - 1) * pageSize;
+
+  const [products, total] = await Promise.all([
+    Product.find(query)
+      .populate("genre")
+      .populate("category")
+      .populate("subGenres")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize),
+    Product.countDocuments(query),
+  ]);
+
+  res.json({
+    products: products.map(sanitizePublicProduct),
+    total,
+    page: pageNum,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  });
 });
 
 router.get("/get/count", async (req, res) => {

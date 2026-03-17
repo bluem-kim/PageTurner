@@ -15,14 +15,25 @@ export const fetchProducts = (options = {}) => async (dispatch) => {
     const query = [];
     if (options?.includeArchived) query.push("includeArchived=1");
     if (options?.archivedOnly) query.push("archived=1");
+    if (options?.limit) query.push(`limit=${options.limit}`);
+    if (options?.page) query.push(`page=${options.page}`);
 
     const suffix = query.length ? `?${query.join("&")}` : "";
     const res = await axios.get(`${baseURL}products${suffix}`);
-    dispatch({ type: PRODUCTS_SUCCESS, payload: res.data || [] });
+    // New backend returns { products, total, page, pageSize, totalPages }
+    dispatch({ type: PRODUCTS_SUCCESS, payload: res.data });
   } catch (error) {
+    let errorMessage = "Failed to load products";
+    if (error.response) {
+      errorMessage = error.response.data?.message || `Server error: ${error.response.status}`;
+    } else if (error.request) {
+      errorMessage = "Network error: Could not connect to the backend";
+    } else {
+      errorMessage = error.message || "An unexpected error occurred";
+    }
     dispatch({
       type: PRODUCTS_FAIL,
-      payload: error?.response?.data?.message || "Failed to load products",
+      payload: errorMessage,
     });
   }
 };

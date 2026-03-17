@@ -8,7 +8,15 @@ const productsRoutes = require("./routes/products");
 const usersRoutes = require("./routes/users");
 const ordersRoutes = require("./routes/orders");
 
+
 const app = express();
+
+// Disable ETag and force no-cache headers for all responses
+app.disable('etag');
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 app.use(cors());
 app.use(express.json());

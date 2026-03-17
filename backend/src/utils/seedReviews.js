@@ -100,6 +100,11 @@ const run = async () => {
   const products = await Product.find({ _id: { $in: productIds } });
   const productById = new Map(products.map((p) => [String(p._id), p]));
 
+  if (!products.length) {
+    console.log("No products found for the given review targets.");
+    return;
+  }
+
   let createdReviews = 0;
   let skippedExisting = 0;
   let updatedProducts = 0;
@@ -133,15 +138,29 @@ const run = async () => {
     touchedProductIds.add(String(product._id));
   }
 
+  const bulkOperations = [];
   for (const productId of touchedProductIds) {
     const product = productById.get(productId);
     if (!product) continue;
 
     const stats = recalculateRatings(product.reviews || []);
-    product.rating = stats.rating;
-    product.numReviews = stats.numReviews;
-    await product.save();
-    updatedProducts += 1;
+    bulkOperations.push({
+      updateOne: {
+        filter: { _id: product._id },
+        update: {
+          $set: {
+            rating: stats.rating,
+            numReviews: stats.numReviews,
+            reviews: product.reviews,
+          },
+        },
+      },
+    });
+  }
+
+  if (bulkOperations.length > 0) {
+    const bulkResult = await Product.bulkWrite(bulkOperations, { ordered: false });
+    updatedProducts = bulkResult.modifiedCount;
   }
 
   console.log(`Manual users processed: ${manualUsers.length}`);
