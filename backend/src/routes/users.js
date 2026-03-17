@@ -7,6 +7,7 @@ const { OAuth2Client } = require("google-auth-library");
 
 const User = require("../models/User");
 const { auth, adminOnly } = require("../middleware/auth");
+const { saveJwtToken } = require("../utils/jwtSqliteStore");
 const upload = require("../middleware/upload");
 const { uploadImageBuffer, uploadImage } = require("../config/cloudinary");
 
@@ -26,7 +27,8 @@ const buildAuthPayload = (user) => {
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
-
+  // Store JWT in SQLite for compliance
+  saveJwtToken(user.id, token).catch(() => null);
   return {
     email: user.email,
     name: user.name,

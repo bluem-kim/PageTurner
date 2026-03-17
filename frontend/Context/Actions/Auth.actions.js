@@ -117,10 +117,6 @@ export const loginGoogleUser = async (idToken, dispatch) => {
 };
 
 export const logoutUser = async (dispatch) => {
-  const token = await getJwtToken();
-  if (token) {
-    await removeDevicePushToken(token).catch(() => null);
-  }
   await removeJwtToken();
   await AsyncStorage.removeItem("userProfile");
   dispatch(setCurrentUser({}));
